@@ -1,0 +1,18 @@
+@Backend_HostAddress = http://localhost:5196
+
+### Get all appointments
+GET {{Backend_HostAddress}}/api/appointments
+Accept: application/json
+
+### Create a new patient
+POST {{Backend_HostAddress}}/api/patients
+Content-Type: application/json
+
+{
+  "name": "John Doe",
+  "email": "john@example.com",
+  "birthDate": "1990-01-01"
+}
+
+
+###
