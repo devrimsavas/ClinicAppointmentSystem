@@ -28,7 +28,9 @@ export async function login(_prev: LoginState, formData: FormData): Promise<Logi
   // httpOnly: client-side JavaScript cannot read the token (protects against XSS token theft)
   (await cookies()).set(SESSION_COOKIE, result.data.token, {
     httpOnly: true,
-    secure: process.env.NODE_ENV === "production",
+    // Secure (HTTPS only) in production. SESSION_COOKIE_SECURE=false allows plain HTTP,
+    // e.g. when the Docker setup is opened through a LAN IP instead of localhost.
+    secure: process.env.SESSION_COOKIE_SECURE ? process.env.SESSION_COOKIE_SECURE === "true" : process.env.NODE_ENV === "production",
     sameSite: "lax",
     path: "/",
     expires: new Date(result.data.expiresAt),

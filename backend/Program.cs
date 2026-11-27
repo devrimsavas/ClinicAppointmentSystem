@@ -142,6 +142,15 @@ var app = builder.Build();
 using (var scope = app.Services.CreateScope())
 {
     var logger = scope.ServiceProvider.GetRequiredService<ILogger<Program>>();
+
+    // In Docker the database starts empty: apply EF Core migrations on startup when enabled.
+    // Off by default, so local development and tests keep using "dotnet ef database update".
+    if (app.Configuration.GetValue<bool>("Database:MigrateOnStartup"))
+    {
+        logger.LogInformation("Applying database migrations...");
+        scope.ServiceProvider.GetRequiredService<AppDbContext>().Database.Migrate();
+    }
+
     try
     {
         await AdminSeeder.SeedAsync(
@@ -158,7 +167,8 @@ using (var scope = app.Services.CreateScope())
 
 app.UseCors("AllowAll");
 
-if (app.Environment.IsDevelopment())
+// Swagger in development, or when turned on explicitly (e.g. Swagger__Enabled=true in Docker)
+if (app.Environment.IsDevelopment() || app.Configuration.GetValue<bool>("Swagger:Enabled"))
 {
     app.UseSwagger();
     app.UseSwaggerUI();

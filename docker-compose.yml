@@ -1,0 +1,60 @@
+# Runs the whole application: MySQL + ASP.NET Core API + Next.js frontend.
+#   1. cp .env.example .env   (and fill in the values)
+#   2. docker compose up -d --build
+#   3. open http://localhost:3000   (Swagger: http://localhost:5196/swagger)
+
+services:
+  db:
+    image: mysql:8.4
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:?Set MYSQL_ROOT_PASSWORD in .env}
+      MYSQL_DATABASE: medicalclinics
+      MYSQL_USER: clinic
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:?Set MYSQL_PASSWORD in .env}
+      TZ: Europe/Oslo
+    volumes:
+      - db-data:/var/lib/mysql
+    healthcheck:
+      # The API waits for this, so migrations do not run against a database that is still starting
+      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 --protocol=tcp -u root -p$$MYSQL_ROOT_PASSWORD --silent"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 20s
+
+  api:
+    build: ./backend
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      ConnectionStrings__DefaultConnection: "Server=db;Port=3306;Database=medicalclinics;User=clinic;Password=${MYSQL_PASSWORD}"
+      Jwt__Key: ${JWT_KEY:?Set JWT_KEY in .env (at least 32 characters)}
+      Jwt__Issuer: ClinicBooking
+      Jwt__Audience: ClinicBooking
+      Jwt__ExpiryMinutes: "60"
+      SeedAdmin__Email: ${SEED_ADMIN_EMAIL:?Set SEED_ADMIN_EMAIL in .env}
+      SeedAdmin__Password: ${SEED_ADMIN_PASSWORD:?Set SEED_ADMIN_PASSWORD in .env (at least 8 characters)}
+      SeedAdmin__FullName: Administrator
+      Database__MigrateOnStartup: "true"
+      Swagger__Enabled: ${SWAGGER_ENABLED:-true}
+    ports:
+      - "5196:8080" # only needed for Swagger; the frontend talks to the API inside the Docker network
+
+  web:
+    build: ./frontend
+    restart: unless-stopped
+    depends_on:
+      - api
+    environment:
+      API_URL: http://api:8080/api
+      # Plain HTTP works on localhost; set to "true" behind HTTPS (e.g. Cloudflare)
+      SESSION_COOKIE_SECURE: ${SESSION_COOKIE_SECURE:-false}
+      TZ: Europe/Oslo
+    ports:
+      - "3000:3000"
+
+volumes:
+  db-data:

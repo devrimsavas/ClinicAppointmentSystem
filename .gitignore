@@ -4,3 +4,6 @@ node_modules/
 bin/
 obj/
 TestResults/
+
+# Docker Compose secrets
+.env

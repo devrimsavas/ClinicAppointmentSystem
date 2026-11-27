@@ -1,0 +1,8 @@
+bin/
+obj/
+*.user
+.vs/
+# Never bake secrets into the image: configuration comes from environment variables
+appsettings.json
+appsettings.*.json
+!appsettings.Development.json

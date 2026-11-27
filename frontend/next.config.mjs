@@ -7,6 +7,8 @@ const appRoot = path.dirname(fileURLToPath(import.meta.url));
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  // Self-contained server in .next/standalone, used by the Docker image
+  output: "standalone",
   turbopack: { root: appRoot },
   outputFileTracingRoot: appRoot,
   // The staff area used to live under /admin

@@ -72,6 +72,7 @@ The current time comes from .NET's `TimeProvider`, so the rules can be tested ag
 
 ```
 ClinicAppointmentSystem/
+├── docker-compose.yml  # MySQL + API + frontend
 ├── .github/workflows/  # CI
 ├── backend.Tests/      # xUnit unit + integration tests
 ├── backend/
@@ -146,6 +147,21 @@ npm install
 npm run dev
 ```
 Frontend logs appear in green, backend logs in blue.
+
+### Option C — Docker (MySQL + API + frontend)
+
+Everything runs in containers; no local MySQL, .NET or Node.js needed.
+
+```bash
+cp .env.example .env      # then edit the passwords, JWT_KEY and the first admin
+docker compose up -d --build
+```
+
+- Frontend: http://localhost:3000
+- Swagger: http://localhost:5196/swagger
+- On the first start the API applies the EF Core migrations (`Database__MigrateOnStartup=true`) and creates the admin from `SEED_ADMIN_*`
+- MySQL data is kept in the `db-data` volume; `docker compose down -v` deletes it
+- The frontend calls the API inside the Docker network (`API_URL=http://api:8080/api`); behind HTTPS set `SESSION_COOKIE_SECURE=true`
 
 ### Option B — Manual startup
 
