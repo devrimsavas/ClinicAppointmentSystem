@@ -6,7 +6,8 @@
   "scripts": {
     "dev": "concurrently -k -n FRONT,BACK -c green,blue \"npm run front\" \"npm run back\"",
     "front": "npm --prefix frontend run dev",
-    "back": "dotnet watch run --project backend"
+    "back": "dotnet watch run --project backend",
+    "test": "dotnet test backend.Tests"
   },
   "keywords": [],
   "author": "Devrim Yilmaz",

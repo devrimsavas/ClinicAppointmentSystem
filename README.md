@@ -72,6 +72,8 @@ The current time comes from .NET's `TimeProvider`, so the rules can be tested ag
 
 ```
 ClinicAppointmentSystem/
+├── .github/workflows/  # CI
+├── backend.Tests/      # xUnit unit + integration tests
 ├── backend/
 │   ├── Controllers/
 │   │   ├── AppointmentsController.cs
@@ -194,6 +196,23 @@ Then:
 npm run dev
 ```
 > ⚠️ Make sure the backend is running before starting the frontend.
+
+## 🧪 Tests & CI
+
+Backend tests live in `backend.Tests/` (xUnit) and need no database server:
+
+- **Unit tests** — booking rules (working hours, weekends, overlaps), appointment and user endpoints, login, the admin seeder, and an authorization matrix that fails when a new endpoint is added without deciding who may call it
+- **Integration tests** — the real API pipeline via `WebApplicationFactory` with an in-memory database: 401 without a token, 403 for Staff on admin endpoints, real JWT login, forged tokens rejected, public booking, and the login rate limit
+
+```bash
+dotnet test backend.Tests
+# or from the root folder
+npm test
+```
+
+**GitHub Actions** (`.github/workflows/ci.yml`) runs on every push and pull request:
+- Backend: restore, build, test (results uploaded as an artifact)
+- Frontend: `npm ci`, lint, type check, production build
 
 ## 🔐 CORS Configuration
 
