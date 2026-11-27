@@ -17,7 +17,11 @@ services:
       - db-data:/var/lib/mysql
     healthcheck:
       # The API waits for this, so migrations do not run against a database that is still starting
-      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 --protocol=tcp -u root -p$$MYSQL_ROOT_PASSWORD --silent"]
+      test:
+        [
+          "CMD-SHELL",
+          "mysqladmin ping -h 127.0.0.1 --protocol=tcp -u root -p$$MYSQL_ROOT_PASSWORD --silent",
+        ]
       interval: 5s
       timeout: 5s
       retries: 20
@@ -41,7 +45,7 @@ services:
       Database__MigrateOnStartup: "true"
       Swagger__Enabled: ${SWAGGER_ENABLED:-true}
     ports:
-      - "5196:8080" # only needed for Swagger; the frontend talks to the API inside the Docker network
+      - "127.0.0.1:${API_PORT:-5196}:8080" # only needed for Swagger; the frontend talks to the API inside the Docker network
 
   web:
     build: ./frontend
@@ -54,7 +58,7 @@ services:
       SESSION_COOKIE_SECURE: ${SESSION_COOKIE_SECURE:-false}
       TZ: Europe/Oslo
     ports:
-      - "3000:3000"
+      - "127.0.0.1:${WEB_PORT:-3000}:3000"
 
 volumes:
   db-data:
