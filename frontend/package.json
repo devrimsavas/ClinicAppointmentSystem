@@ -1,30 +1,29 @@
 {
-  "name": "front_end",
+  "name": "frontend",
   "version": "0.1.0",
   "private": true,
   "scripts": {
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "eslint ."
   },
   "dependencies": {
-    "@daypilot/daypilot-lite-react": "^3.33.1",
-    "animate.css": "^4.1.1",
-    "lucide-react": "^0.511.0",
-    "next": "14.1.0",
-    "react": "^18",
-    "react-dom": "^18"
+    "@daypilot/daypilot-lite-react": "^6.3.0",
+    "lucide-react": "^1.81.0",
+    "next": "^16.4.6",
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1"
   },
   "devDependencies": {
-    "@types/node": "^20",
-    "@types/react": "^18",
-    "@types/react-dom": "^18",
-    "autoprefixer": "^10.0.1",
-    "eslint": "^8",
-    "eslint-config-next": "14.1.0",
-    "postcss": "^8",
-    "tailwindcss": "^3.3.0",
-    "typescript": "^5"
+    "@types/node": "^22.20.7",
+    "@types/react": "^19.3.3",
+    "@types/react-dom": "^19.3.0",
+    "autoprefixer": "^10.7.0",
+    "eslint": "^9.39.5",
+    "eslint-config-next": "^16.4.6",
+    "postcss": "^8.5.33",
+    "tailwindcss": "^3.4.19",
+    "typescript": "^5.9.3"
   }
 }

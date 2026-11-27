@@ -1,0 +1,9 @@
+import Image from "next/image";
+
+export default function Loading() {
+  return (
+    <div className="flex justify-center py-16">
+      <Image src="/loadingimage.png" alt="Loading" width={200} height={200} className="animate-pulse rounded-full" />
+    </div>
+  );
+}

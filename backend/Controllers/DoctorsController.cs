@@ -1,5 +1,6 @@
 using ClinicBooking.DTOs;
 using ClinicBooking.Models;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 
@@ -11,6 +12,7 @@ namespace ClinicBooking.Controllers
 
     [ApiController]
     [Route("api/[controller]")]
+    [Authorize(Roles = Roles.Admin)]
     public class DoctorsController : ControllerBase
     {
         private readonly AppDbContext _context;
@@ -29,12 +31,11 @@ namespace ClinicBooking.Controllers
         /// GET /api/Doctors
         /// </remarks>
         /// <response code="200">Doctors retrieved successfully</response>
-        /// <response code="404">No doctors found</response>
 
 
         [HttpGet]
+        [AllowAnonymous]
         [ProducesResponseType(StatusCodes.Status200OK)]
-        [ProducesResponseType(StatusCodes.Status404NotFound)]
 
         public async Task<ActionResult<IEnumerable<DoctorReadDto>>> GetDoctors()
         {
@@ -43,14 +44,13 @@ namespace ClinicBooking.Controllers
                 .Include(d => d.Speciality)
                 .ToListAsync();
 
-            if (!doctors.Any())
-                return NotFound(new { Message = "No doctors found." });
-
             var result = doctors.Select(d => new DoctorReadDto
             {
                 Id = d.ID,
                 FirstName = d.FirstName ?? "",
                 LastName = d.LastName ?? "",
+                ClinicId = d.ClinicID,
+                SpecialityId = d.SpecialityID,
                 ClinicName = d.Clinic?.Name,
                 SpecialityName = d.Speciality?.Name
             });
@@ -67,6 +67,7 @@ namespace ClinicBooking.Controllers
         /// <response code="404">Doctor not found</response>
 
         [HttpGet("{id}")]
+        [AllowAnonymous]
         [ProducesResponseType(StatusCodes.Status200OK)]
         [ProducesResponseType(StatusCodes.Status404NotFound)]
 
@@ -85,6 +86,8 @@ namespace ClinicBooking.Controllers
                 Id = doctor.ID,
                 FirstName = doctor.FirstName ?? "",
                 LastName = doctor.LastName ?? "",
+                ClinicId = doctor.ClinicID,
+                SpecialityId = doctor.SpecialityID,
                 ClinicName = doctor.Clinic?.Name,
                 SpecialityName = doctor.Speciality?.Name
             };
@@ -154,6 +157,8 @@ namespace ClinicBooking.Controllers
                 Id = created.ID,
                 FirstName = created.FirstName!,
                 LastName = created.LastName!,
+                ClinicId = created.ClinicID,
+                SpecialityId = created.SpecialityID,
                 ClinicName = created.Clinic?.Name,
                 SpecialityName = created.Speciality?.Name
             };

@@ -1,6 +1,7 @@
 //clinic controller with dto
 using ClinicBooking.Models;
 using ClinicBooking.DTOs;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 
@@ -11,6 +12,7 @@ namespace ClinicBooking.Controllers
     /// </summary>
     [ApiController]
     [Route("api/[controller]")]
+    [Authorize(Roles = Roles.Admin)]
     public class ClinicsController : ControllerBase
     {
         private readonly AppDbContext _context;
@@ -26,18 +28,14 @@ namespace ClinicBooking.Controllers
         /// </summary>
         /// <remarks>GET: /api/clinics</remarks>
         /// <response code="200">Returns the list of clinics</response>
-        /// <response code="404">If no clinics are found</response>
 
         [HttpGet]
+        [AllowAnonymous]
         [ProducesResponseType(StatusCodes.Status200OK)]
-        [ProducesResponseType(StatusCodes.Status404NotFound)]
 
         public async Task<ActionResult<IEnumerable<ClinicReadDto>>> GetClinics()
         {
             var clinics = await _context.Clinics.ToListAsync();
-
-            if (!clinics.Any())
-                return NotFound(new { Message = "There is not any clinic yet." });
 
             var result = clinics.Select(c => new ClinicReadDto
             {
@@ -58,6 +56,7 @@ namespace ClinicBooking.Controllers
         /// <response code="200">Returns the clinic</response>
         /// <response code="404">If the clinic is not found</response>
         [HttpGet("{id}")]
+        [AllowAnonymous]
         [ProducesResponseType(StatusCodes.Status200OK)]
         [ProducesResponseType(StatusCodes.Status404NotFound)]
 

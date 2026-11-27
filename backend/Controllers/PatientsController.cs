@@ -1,5 +1,6 @@
 using ClinicBooking.DTOs;
 using ClinicBooking.Models;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 
@@ -11,6 +12,7 @@ namespace ClinicBooking.Controllers
 
     [ApiController]
     [Route("api/[controller]")]
+    [Authorize(Roles = Roles.AdminOrStaff)]
     public class PatientsController : ControllerBase
     {
         private readonly AppDbContext _context;
@@ -29,17 +31,12 @@ namespace ClinicBooking.Controllers
         /// GET /api/Patients
         /// </remarks>
         /// <response code="200">Patients retrieved successfully</response>
-        /// <response code="404">No patients found</response>
 
         [HttpGet]
         [ProducesResponseType(StatusCodes.Status200OK)]
-        [ProducesResponseType(StatusCodes.Status404NotFound)]
 
         public async Task<ActionResult<IEnumerable<PatientReadDto>>> GetPatients()
         {
-            if (_context.Patients == null)
-                return NotFound(new { Message = "No patients found." });
-
             var patients = await _context.Patients
                 .Select(p => new PatientReadDto
                 {

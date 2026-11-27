@@ -1,7 +1,9 @@
-#CREATE a File " appsettings.json" 
-#PASTE Json file below
-#ENTER your mysql default connection 
-
+# CREATE a file "appsettings.json" next to this file (it is git-ignored) and paste the JSON below.
+# - DefaultConnection: your local MySQL connection
+# - Jwt:Key: a random secret of at least 32 characters. Generate one, e.g. in PowerShell:
+#     [Convert]::ToBase64String((1..48 | ForEach-Object { Get-Random -Maximum 256 }))
+# - SeedAdmin: the first admin account, created on startup only if there are no users yet.
+#   Log in with it, create the other accounts from the admin panel, then you can remove the password here.
 
 {
   "Logging": {
@@ -13,7 +15,16 @@
   "AllowedHosts": "*",
   "ConnectionStrings": {
     "DefaultConnection": "Server=localhost;Database=medicalclinics;user=root;password=yourpassword"
-  
+  },
+  "Jwt": {
+    "Key": "replace-with-a-random-secret-of-at-least-32-characters",
+    "Issuer": "ClinicBooking",
+    "Audience": "ClinicBooking",
+    "ExpiryMinutes": 60
+  },
+  "SeedAdmin": {
+    "Email": "admin@novamed.no",
+    "Password": "replace-with-a-strong-password",
+    "FullName": "Administrator"
   }
-
 }

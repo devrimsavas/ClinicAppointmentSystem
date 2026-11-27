@@ -1,7 +1,9 @@
-//appointment controller with dto 
+//appointment controller with dto
 
 using ClinicBooking.DTOs;
 using ClinicBooking.Models;
+using ClinicBooking.Services;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 
@@ -12,56 +14,94 @@ namespace ClinicBooking.Controllers
     /// </summary>
     [ApiController]
     [Route("api/[controller]")]
+    [Authorize(Roles = Roles.AdminOrStaff)]
     public class AppointmentsController : ControllerBase
     {
-        private readonly AppDbContext _context;
-        /// <summary>
-        /// Initializes a new instance of the <see cref="AppointmentsController"/>  class.
-        /// </summary>
-        /// <param name="context"></param>
+        private const int MaxBusyRangeDays = 62;
 
-        public AppointmentsController(AppDbContext context)
+        private readonly AppDbContext _context;
+        private readonly AppointmentValidator _validator;
+        private readonly TimeProvider _timeProvider;
+
+        /// <summary>
+        /// Initializes a new instance of the <see cref="AppointmentsController"/> class.
+        /// </summary>
+        public AppointmentsController(AppDbContext context, AppointmentValidator validator, TimeProvider timeProvider)
         {
             _context = context;
+            _validator = validator;
+            _timeProvider = timeProvider;
         }
 
         // GET all appointments
         /// <summary>
-        /// Retrieves all appointments 
+        /// Retrieves all appointments
         /// </summary>
         /// <remarks>
         /// Sample Request:
         ///     Get /api/Appointments
         /// </remarks>
-        /// <response code="200"> Appointments retrieved succesfull</response>
-        /// <response code="404">No Appointments found</response>
+        /// <response code="200">Appointments retrieved successfully (empty list if there are none)</response>
         [HttpGet]
         [ProducesResponseType(StatusCodes.Status200OK)]
-        [ProducesResponseType(StatusCodes.Status404NotFound)]
-
         public async Task<ActionResult<IEnumerable<AppointmentReadDto>>> GetAppointments()
         {
-            var appointments = await _context.Appointments
-                .Include(a => a.Patient)
+            var appointments = await AppointmentsWithDetails().ToListAsync();
+
+            return Ok(new { appointments = appointments.Select(ToReadDto) });
+        }
+
+        // GET busy slots (public, no patient data)
+        /// <summary>
+        /// Retrieves booked time ranges without any patient information, for the public calendar.
+        /// </summary>
+        /// <remarks>
+        /// Defaults to the next 31 days. The range can be at most 62 days.
+        ///
+        /// Sample request:
+        ///     GET /api/appointments/busy?from=2026-12-01&amp;to=2026-12-31&amp;doctorId=2
+        /// </remarks>
+        /// <param name="from">Start of the range (inclusive). Defaults to today.</param>
+        /// <param name="to">End of the range (exclusive). Defaults to 31 days after "from".</param>
+        /// <param name="doctorId">Optional: only this doctor's appointments.</param>
+        /// <response code="200">Busy slots retrieved successfully</response>
+        /// <response code="400">Invalid range</response>
+        [HttpGet("busy")]
+        [AllowAnonymous]
+        [ProducesResponseType(StatusCodes.Status200OK)]
+        [ProducesResponseType(StatusCodes.Status400BadRequest)]
+        public async Task<ActionResult<IEnumerable<BusySlotDto>>> GetBusySlots(
+            [FromQuery] DateTime? from, [FromQuery] DateTime? to, [FromQuery] int? doctorId)
+        {
+            var start = from ?? _timeProvider.GetLocalNow().Date;
+            var end = to ?? start.AddDays(31);
+
+            if (end <= start)
+                return BadRequest(new { Message = "\"to\" must be after \"from\"." });
+
+            if ((end - start).TotalDays > MaxBusyRangeDays)
+                return BadRequest(new { Message = $"The range can be at most {MaxBusyRangeDays} days." });
+
+            var query = _context.Appointments
                 .Include(a => a.Doctor)
-                .Include(a => a.Clinic)
-                .ToListAsync();
+                .Where(a => a.AppointmentDateTime >= start && a.AppointmentDateTime < end);
 
-            if (!appointments.Any())
-                return NotFound(new { Message = "No appointments found." });
+            if (doctorId.HasValue)
+                query = query.Where(a => a.DoctorId == doctorId.Value);
 
-            var result = appointments.Select(a => new AppointmentReadDto
-            {
-                Id = a.Id,
-                AppointmentDateTime = a.AppointmentDateTime,
-                Category = a.Category,
-                DurationInMinutes = a.DurationInMinutes,
-                PatientName = a.Patient != null ? $"{a.Patient.FirstName} {a.Patient.LastName}" : null,
-                DoctorName = a.Doctor != null ? $"{a.Doctor.FirstName} {a.Doctor.LastName}" : null,
-                ClinicName = a.Clinic?.Name
-            });
+            var appointments = await query.ToListAsync();
 
-            return Ok(new { appointments = result });
+            var slots = appointments
+                .OrderBy(a => a.AppointmentDateTime)
+                .Select(a => new BusySlotDto
+                {
+                    DoctorId = a.DoctorId,
+                    DoctorName = a.Doctor != null ? $"{a.Doctor.FirstName} {a.Doctor.LastName}" : "",
+                    Start = a.AppointmentDateTime,
+                    End = a.AppointmentDateTime.AddMinutes(a.DurationInMinutes)
+                });
+
+            return Ok(new { slots });
         }
 
         // GET by ID
@@ -72,95 +112,38 @@ namespace ClinicBooking.Controllers
         /// <param name="id">The ID of the appointment</param>
         /// <response code="200">Returns the appointment</response>
         /// <response code="404">If the appointment is not found</response>
-
         [HttpGet("{id}")]
         [ProducesResponseType(StatusCodes.Status200OK)]
         [ProducesResponseType(StatusCodes.Status404NotFound)]
-
         public async Task<ActionResult<AppointmentReadDto>> GetAppointment(int id)
         {
-            var a = await _context.Appointments
-                .Include(a => a.Patient)
-                .Include(a => a.Doctor)
-                .Include(a => a.Clinic)
-                .FirstOrDefaultAsync(a => a.Id == id);
+            var appointment = await AppointmentsWithDetails().FirstOrDefaultAsync(a => a.Id == id);
 
-            if (a == null)
+            if (appointment == null)
                 return NotFound(new { Message = "Appointment not found." });
 
-            var dto = new AppointmentReadDto
-            {
-                Id = a.Id,
-                AppointmentDateTime = a.AppointmentDateTime,
-                Category = a.Category,
-                DurationInMinutes = a.DurationInMinutes,
-                PatientName = a.Patient != null ? $"{a.Patient.FirstName} {a.Patient.LastName}" : null,
-                DoctorName = a.Doctor != null ? $"{a.Doctor.FirstName} {a.Doctor.LastName}" : null,
-                ClinicName = a.Clinic?.Name
-            };
-
-            return Ok(new { appointment = dto });
+            return Ok(new { appointment = ToReadDto(appointment) });
         }
 
         // POST: create appointment
         /// <summary>
-        /// Creates a new appointment.
+        /// Creates a new appointment for an existing patient.
         /// </summary>
         /// <remarks>POST: /api/appointments</remarks>
         /// <param name="dto">The appointment data</param>
         /// <response code="201">Returns the created appointment</response>
         /// <response code="400">If data is invalid or conflicts exist</response>
-
         [HttpPost]
         [ProducesResponseType(StatusCodes.Status201Created)]
         [ProducesResponseType(StatusCodes.Status400BadRequest)]
-
         public async Task<ActionResult<AppointmentReadDto>> CreateAppointment([FromBody] AppointmentCreateDto dto)
         {
-            if (dto == null || string.IsNullOrWhiteSpace(dto.Category))
-                return BadRequest(new { Message = "Category is required." });
+            var error = await _validator.ValidateAsync(new AppointmentCandidate(
+                dto.AppointmentDateTime, dto.DurationInMinutes, dto.Category,
+                dto.DoctorId, dto.ClinicId, PatientId: dto.PatientId));
 
-            if (dto.DurationInMinutes <= 0)
-                return BadRequest(new { Message = "Duration must be greater than zero" });
-
-            if (!await _context.Patients.AnyAsync(p => p.Id == dto.PatientId))
-                return BadRequest(new { Message = "Patient ID does not exist." });
-
-            if (!await _context.Doctors.AnyAsync(d => d.ID == dto.DoctorId))
-                return BadRequest(new { Message = "Doctor ID does not exist." });
-
-            if (!await _context.Clinics.AnyAsync(c => c.ID == dto.ClinicId))
-                return BadRequest(new { Message = "Clinic ID does not exist." });
-
-            var newStart = dto.AppointmentDateTime;
-            var newEnd = newStart.AddMinutes(dto.DurationInMinutes);
-
-            // Prevent overlapping appointments for same patient
-            bool patientClash = await _context.Appointments.AnyAsync(a =>
-                a.PatientId == dto.PatientId &&
-                newStart < a.AppointmentDateTime.AddMinutes(a.DurationInMinutes) &&
-                a.AppointmentDateTime < newEnd);
-
-            if (patientClash)
-                return BadRequest(new { Message = "Patient already has an overlapping appointment." });
-
-            // Prevent overlapping appointments for same doctor
-            bool doctorClash = await _context.Appointments.AnyAsync(a =>
-                a.DoctorId == dto.DoctorId &&
-                newStart < a.AppointmentDateTime.AddMinutes(a.DurationInMinutes) &&
-                a.AppointmentDateTime < newEnd);
-
-            if (doctorClash)
-                return BadRequest(new { Message = "Doctor is already booked at this time." });
-
-            //Prevent appointment before actual time 
-            if (dto.AppointmentDateTime < DateTime.Now)
-                return BadRequest(new { Message = "You cannot book an appointment in the past." });
-
-            //Restrict to working hours (08-18)
-            var time = dto.AppointmentDateTime.TimeOfDay;
-            if (time < TimeSpan.FromHours(8) || time > TimeSpan.FromHours(18))
-                return BadRequest(new { Message = "Appointments must be booked between 08:00 and 18:00." });
+            if (error != null)
+                return BadRequest(new { Message = error });
 
             var appointment = new Appointment
             {
@@ -175,27 +158,8 @@ namespace ClinicBooking.Controllers
             _context.Appointments.Add(appointment);
             await _context.SaveChangesAsync();
 
-            var created = await _context.Appointments
-                .Include(a => a.Patient)
-                .Include(a => a.Doctor)
-                .Include(a => a.Clinic)
-                .FirstOrDefaultAsync(a => a.Id == appointment.Id);
-
-            var resultDto = new AppointmentReadDto
-            {
-                Id = created!.Id,
-                AppointmentDateTime = created.AppointmentDateTime,
-                Category = created.Category,
-                DurationInMinutes = created.DurationInMinutes,
-                PatientName = created.Patient != null ? $"{created.Patient.FirstName} {created.Patient.LastName}" : null,
-                DoctorName = created.Doctor != null ? $"{created.Doctor.FirstName} {created.Doctor.LastName}" : null,
-                ClinicName = created.Clinic?.Name
-            };
-
-            return CreatedAtAction(nameof(GetAppointment), new { id = resultDto.Id }, resultDto);
+            return await CreatedResult(appointment.Id);
         }
-
-
 
         // PUT: update
         /// <summary>
@@ -205,44 +169,24 @@ namespace ClinicBooking.Controllers
         /// <param name="id">The ID of the appointment to update</param>
         /// <param name="dto">The updated appointment data</param>
         /// <response code="200">If the update was successful</response>
-        /// <response code="400">If the data is invalid</response>
+        /// <response code="400">If the data is invalid or conflicts exist</response>
         /// <response code="404">If the appointment is not found</response>
-
-
         [HttpPut("{id}")]
         [ProducesResponseType(StatusCodes.Status200OK)]
         [ProducesResponseType(StatusCodes.Status400BadRequest)]
         [ProducesResponseType(StatusCodes.Status404NotFound)]
-
         public async Task<IActionResult> UpdateAppointment(int id, [FromBody] AppointmentCreateDto dto)
         {
             var existing = await _context.Appointments.FindAsync(id);
             if (existing == null)
                 return NotFound(new { Message = "Appointment not found." });
 
-            if (!await _context.Patients.AnyAsync(p => p.Id == dto.PatientId))
-                return BadRequest(new { Message = "Invalid patient." });
+            var error = await _validator.ValidateAsync(new AppointmentCandidate(
+                dto.AppointmentDateTime, dto.DurationInMinutes, dto.Category,
+                dto.DoctorId, dto.ClinicId, PatientId: dto.PatientId, ExcludeAppointmentId: id));
 
-            if (!await _context.Doctors.AnyAsync(d => d.ID == dto.DoctorId))
-                return BadRequest(new { Message = "Invalid doctor." });
-
-            if (!await _context.Clinics.AnyAsync(c => c.ID == dto.ClinicId))
-                return BadRequest(new { Message = "Invalid clinic." });
-
-            if (string.IsNullOrWhiteSpace(dto.Category))
-                return BadRequest(new { Message = "Category is required." });
-
-            var newStart = dto.AppointmentDateTime;
-            var newEnd = newStart.AddMinutes(dto.DurationInMinutes);
-
-            bool clash = await _context.Appointments.AnyAsync(a =>
-                a.Id != id &&
-                a.PatientId == dto.PatientId &&
-                newStart < a.AppointmentDateTime.AddMinutes(a.DurationInMinutes) &&
-                a.AppointmentDateTime < newEnd);
-
-            if (clash)
-                return BadRequest(new { Message = "Updated time conflicts with another appointment." });
+            if (error != null)
+                return BadRequest(new { Message = error });
 
             existing.AppointmentDateTime = dto.AppointmentDateTime;
             existing.Category = dto.Category;
@@ -256,8 +200,6 @@ namespace ClinicBooking.Controllers
             return Ok(new { Message = "Appointment updated successfully." });
         }
 
-
-
         // DELETE
         /// <summary>
         /// Deletes an appointment.
@@ -266,11 +208,9 @@ namespace ClinicBooking.Controllers
         /// <param name="id">The ID of the appointment to delete</param>
         /// <response code="200">If the deletion was successful</response>
         /// <response code="404">If the appointment is not found</response>
-
         [HttpDelete("{id}")]
         [ProducesResponseType(StatusCodes.Status200OK)]
         [ProducesResponseType(StatusCodes.Status404NotFound)]
-
         public async Task<IActionResult> DeleteAppointment(int id)
         {
             var appointment = await _context.Appointments.FindAsync(id);
@@ -283,12 +223,14 @@ namespace ClinicBooking.Controllers
             return Ok(new { Message = "Appointment deleted successfully." });
         }
 
-
-        //Create a new appointment with new or existing patient 
+        //Create a new appointment with new or existing patient
         /// <summary>
         /// Creates a new appointment along with a new or existing patient record.
         /// </summary>
         /// <remarks>
+        /// An existing patient is matched by first name, last name and email.
+        /// The patient is only created if the appointment is valid.
+        ///
         /// Sample request:
         ///
         /// {
@@ -300,7 +242,7 @@ namespace ClinicBooking.Controllers
         ///     "gender": "Female"
         ///   },
         ///   "appointment": {
-        ///     "appointmentDateTime": "2025-05-24T14:00:00",
+        ///     "appointmentDateTime": "2026-12-01T14:00:00",
         ///     "category": "Checkup",
         ///     "doctorId": 2,
         ///     "clinicId": 1,
@@ -313,9 +255,8 @@ namespace ClinicBooking.Controllers
         /// <returns>Returns the created appointment information.</returns>
         /// <response code="201">Appointment successfully created.</response>
         /// <response code="400">Invalid input or scheduling conflict.</response>
-
-
         [HttpPost("with-patient")]
+        [AllowAnonymous]
         [ProducesResponseType(StatusCodes.Status201Created)]
         [ProducesResponseType(StatusCodes.Status400BadRequest)]
         public async Task<ActionResult<AppointmentReadDto>> CreateAppointmentWithPatient([FromBody] AppointmentWithPatientCreateDto dto)
@@ -323,104 +264,77 @@ namespace ClinicBooking.Controllers
             var p = dto.Patient;
             var a = dto.Appointment;
 
+            if (p == null || a == null)
+                return BadRequest(new { Message = "Patient and appointment data are required." });
+
             if (string.IsNullOrWhiteSpace(p.FirstName) || string.IsNullOrWhiteSpace(p.LastName) || string.IsNullOrWhiteSpace(p.Email))
                 return BadRequest(new { Message = "Patient info is required." });
 
-            if (string.IsNullOrWhiteSpace(a.Category))
-                return BadRequest(new { Message = "Appointment category is required." });
-
-            if (a.DurationInMinutes <= 0)
-                return BadRequest(new { Message = "Duration must be greater than zero." });
-
-            if (!await _context.Doctors.AnyAsync(d => d.ID == a.DoctorId))
-                return BadRequest(new { Message = "Doctor not found." });
-
-            if (!await _context.Clinics.AnyAsync(c => c.ID == a.ClinicId))
-                return BadRequest(new { Message = "Clinic not found." });
-
+            // Look up the patient, but do not create it before the appointment is validated
             var patient = await _context.Patients.FirstOrDefaultAsync(x =>
                 x.FirstName == p.FirstName &&
                 x.LastName == p.LastName &&
                 x.Email == p.Email);
 
-            if (patient == null)
+            var error = await _validator.ValidateAsync(new AppointmentCandidate(
+                a.AppointmentDateTime, a.DurationInMinutes, a.Category,
+                a.DoctorId, a.ClinicId, PatientId: patient?.Id));
+
+            if (error != null)
+                return BadRequest(new { Message = error });
+
+            patient ??= new Patient
             {
-                patient = new Patient
-                {
-                    FirstName = p.FirstName,
-                    LastName = p.LastName,
-                    Email = p.Email,
-                    BirthDate = p.BirthDate,
-                    Gender = p.Gender
-                };
-
-                _context.Patients.Add(patient);
-                await _context.SaveChangesAsync();
-            }
-
-            var start = a.AppointmentDateTime;
-            var end = start.AddMinutes(a.DurationInMinutes);
-
-            // Check for patient conflict
-            var patientClash = await _context.Appointments.AnyAsync(ap =>
-                ap.PatientId == patient.Id &&
-                start < ap.AppointmentDateTime.AddMinutes(ap.DurationInMinutes) &&
-                ap.AppointmentDateTime < end);
-
-            if (patientClash)
-                return BadRequest(new { Message = "Patient already has a conflicting appointment." });
-
-            // Check for doctor conflict
-            var doctorClash = await _context.Appointments.AnyAsync(ap =>
-                ap.DoctorId == a.DoctorId &&
-                start < ap.AppointmentDateTime.AddMinutes(ap.DurationInMinutes) &&
-                ap.AppointmentDateTime < end);
-
-            if (doctorClash)
-                return BadRequest(new { Message = "Doctor is already booked at this time." });
-
-            //prevent booking in the past and out of working hours
-            if (a.AppointmentDateTime < DateTime.Now)
-                return BadRequest(new { Message = "You cannot book an appointment in the past." });
-
-            var time = a.AppointmentDateTime.TimeOfDay;
-            if (time < TimeSpan.FromHours(8) || time > TimeSpan.FromHours(18))
-                return BadRequest(new { Message = "Appointments must be booked between 08:00 and 18:00." });
-
-
+                FirstName = p.FirstName,
+                LastName = p.LastName,
+                Email = p.Email,
+                BirthDate = p.BirthDate,
+                Gender = p.Gender
+            };
 
             var newAppointment = new Appointment
             {
                 AppointmentDateTime = a.AppointmentDateTime,
                 Category = a.Category,
-                PatientId = patient.Id,
+                Patient = patient,
                 DoctorId = a.DoctorId,
                 ClinicId = a.ClinicId,
                 DurationInMinutes = a.DurationInMinutes
             };
 
+            // Patient (if new) and appointment are saved together in one transaction
             _context.Appointments.Add(newAppointment);
             await _context.SaveChangesAsync();
 
-            var created = await _context.Appointments
-                .Include(x => x.Patient)
-                .Include(x => x.Doctor)
-                .Include(x => x.Clinic)
-                .FirstOrDefaultAsync(x => x.Id == newAppointment.Id);
-
-            var result = new AppointmentReadDto
-            {
-                Id = created!.Id,
-                AppointmentDateTime = created.AppointmentDateTime,
-                Category = created.Category,
-                DurationInMinutes = created.DurationInMinutes,
-                PatientName = $"{created.Patient?.FirstName} {created.Patient?.LastName}",
-                DoctorName = $"{created.Doctor?.FirstName} {created.Doctor?.LastName}",
-                ClinicName = created.Clinic?.Name
-            };
-
-            return CreatedAtAction(nameof(GetAppointment), new { id = result.Id }, result);
+            return await CreatedResult(newAppointment.Id);
         }
 
+        private IQueryable<Appointment> AppointmentsWithDetails() =>
+            _context.Appointments
+                .Include(a => a.Patient)
+                .Include(a => a.Doctor)
+                .Include(a => a.Clinic);
+
+        private async Task<ActionResult<AppointmentReadDto>> CreatedResult(int appointmentId)
+        {
+            var created = await AppointmentsWithDetails().FirstAsync(a => a.Id == appointmentId);
+            var dto = ToReadDto(created);
+
+            return CreatedAtAction(nameof(GetAppointment), new { id = dto.Id }, dto);
+        }
+
+        private static AppointmentReadDto ToReadDto(Appointment a) => new()
+        {
+            Id = a.Id,
+            AppointmentDateTime = a.AppointmentDateTime,
+            Category = a.Category,
+            DurationInMinutes = a.DurationInMinutes,
+            PatientId = a.PatientId,
+            DoctorId = a.DoctorId,
+            ClinicId = a.ClinicId,
+            PatientName = a.Patient != null ? $"{a.Patient.FirstName} {a.Patient.LastName}" : null,
+            DoctorName = a.Doctor != null ? $"{a.Doctor.FirstName} {a.Doctor.LastName}" : null,
+            ClinicName = a.Clinic?.Name
+        };
     }
 }

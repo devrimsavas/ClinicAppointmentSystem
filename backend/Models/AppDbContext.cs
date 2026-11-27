@@ -12,11 +12,17 @@ namespace ClinicBooking.Models
         public DbSet<Doctor> Doctors {get;set;}
         public DbSet<Patient> Patients {get;set;}
         public DbSet<Speciality> Specialities {get;set;}
+        public DbSet<StaffUser> Users {get;set;}
 
         //explicitily model building 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
             base.OnModelCreating(modelBuilder);
+
+            // Staff users: email is the login name and must be unique
+            modelBuilder.Entity<StaffUser>()
+                .HasIndex(u => u.Email)
+                .IsUnique();
 
             // Appointment
             modelBuilder.Entity<Appointment>()

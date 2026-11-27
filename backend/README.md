@@ -1,4 +1,4 @@
-# Clinic Appointment Booking System BACK-END 
+# Clinic Appointment Booking System — Backend
 
 This is the **Back-end API** for the Clinic Appointment Booking system developed using **ASP.NET Core 8** and **Entity Framework Core**, with a **MySQL** database.
 

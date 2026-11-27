@@ -26,6 +26,9 @@ namespace ClinicBooking.DTOs
         /// The full name of the patient attending the appointment.
         /// </summary>
         /// <example>Jane Doe</example>
+        public int PatientId { get; set; }
+        public int DoctorId { get; set; }
+        public int ClinicId { get; set; }
         public string? PatientName { get; set; }
 
         /// <summary>

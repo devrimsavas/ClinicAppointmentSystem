@@ -2,6 +2,7 @@
 
 using ClinicBooking.DTOs;
 using ClinicBooking.Models;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 
@@ -13,6 +14,7 @@ namespace ClinicBooking.Controllers
 
     [ApiController]
     [Route("api/[controller]")]
+    [Authorize(Roles = Roles.Admin)]
     public class SpecialitiesController : ControllerBase
     {
         private readonly AppDbContext _context;
@@ -27,17 +29,13 @@ namespace ClinicBooking.Controllers
         /// Retrieves all specialities
         /// </summary>
         /// <response code="200">Returns the list of specialities</response>
-        /// <response code="404">No specialities found</response>
 
         [HttpGet]
+        [AllowAnonymous]
         [ProducesResponseType(StatusCodes.Status200OK)]
-        [ProducesResponseType(StatusCodes.Status404NotFound)]
         public async Task<ActionResult<IEnumerable<SpecialityReadDto>>> GetSpecialities()
         {
             var specialities = await _context.Specialities.ToListAsync();
-
-            if (!specialities.Any())
-                return NotFound(new { Message = "No specialities found." });
 
             var result = specialities.Select(s => new SpecialityReadDto
             {
@@ -57,6 +55,7 @@ namespace ClinicBooking.Controllers
         /// <response code="404">Speciality not found</response>
 
         [HttpGet("{id}")]
+        [AllowAnonymous]
         [ProducesResponseType(StatusCodes.Status200OK)]
         [ProducesResponseType(StatusCodes.Status404NotFound)]
 

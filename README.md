@@ -1,280 +1,121 @@
 # NOVAMED Clinic Appointment Booking System
 
-This application simulates appointment services for an imaginary clinic group called **NOVAMED**, supporting roles such as **patients**, **doctors**, **desk staff**, and **admins**.
+A full-stack clinic appointment booking application for an imaginary clinic group called **NOVAMED**, supporting patients, doctors, desk staff, and admin roles. Built with an ASP.NET Core 8 backend and a Next.js 16 frontend.
 
-Users can **create**, **update**, **delete**, or **view** appointments. It uses a **local MySQL database**, but can work with any relational database using the appropriate .NET packages.
+## 🏗️ Application Structure
 
----
+The project is split into two parts:
 
-## Application Structure
+- **`backend/`** — ASP.NET Core 8 + Entity Framework Core + MySQL. Handles all business logic, REST API routes, and database operations.
+- **`frontend/`** — Next.js 16 (App Router) + React 19 + Tailwind CSS. The public site and a role-based staff portal.
 
-The project is divided into two main parts:
+## 🚀 Features
 
-### 🔹 Backend
+### Public site
+- **Home** (`/`) — landing page with quick links
+- **Book an appointment** (`/book`) — no account needed; doctors are filtered by the chosen clinic, and the booking rules are shown next to the form
+- **Find a doctor** (`/doctors`) — all doctors, with search by first/last name
+- **Availability** (`/calendar`) — month and day view of booked times (no patient data), filterable by doctor
+- **About us, Contact, Privacy policy**
 
-- Built with **ASP.NET 8**
-- Handles all business logic, API routes, and database operations
-- Refer to the backend's own `README.md` for detailed instructions on installation, usage, and available endpoints
+### Staff portal (`/staff`, staff login required)
+- **Dashboard** — today's and upcoming appointments
+- **Appointments, Calendar, Patients** — Staff and Admin
+- **Doctors, Clinics, Specialities, Staff users** — Admin only (hidden from Staff and blocked in three places: `proxy.ts`, the page, and the API)
+- **My account** — change your own password
+- A patient, doctor or clinic that still has appointments cannot be deleted
 
-### 🔹 Frontend
+## 🔐 Authentication & Roles
 
-- Built with **Next.js v14**
-- Responsible for the user interface
-- Uses **Tailwind CSS** for styling
-- Detailed documentation provided in the frontend's `README.md`
+The API uses JWT bearer tokens. Patients do not have accounts; only clinic staff log in.
 
----
+| Role | Can do |
+|---|---|
+| **Public** (no login) | Book an appointment (`with-patient`), search doctors, list clinics / doctors / specialities, see busy time slots (no patient data) |
+| **Staff** (front desk) | Everything public, plus manage appointments and patients |
+| **Admin** | Everything Staff can, plus manage clinics, doctors, specialities and staff accounts |
 
-## Install and Run the Application
+- **Secure by default:** a fallback authorization policy requires login for every endpoint that is not explicitly marked public
+- **No public registration:** the first admin is created on startup from the `SeedAdmin` settings (only when there are no users yet); all other accounts are created by an admin
+- Passwords are hashed with ASP.NET Core's `PasswordHasher` (PBKDF2); emails are stored lower-case and are unique
+- Login is rate limited to 5 attempts per minute per IP address, and returns the same error for an unknown email and a wrong password
+- The public calendar uses `GET /api/appointments/busy`, which returns only time ranges and doctor names, never patient data
 
-You can start the full application using either an **automatic** or **manual** method.
+## 📅 Booking Rules
 
-###  A. Automatic Startup
+All booking rules live in one place, `backend/Services/AppointmentValidator.cs`, and are enforced the same way when an appointment is created, created together with a new patient, or updated:
 
-In the **root folder**, the application uses the `concurrently` package to start both backend and frontend.
+- Appointments are on **weekdays only**
+- The whole appointment must fit inside working hours: it starts at **08:00** or later and ends at **18:00** at the latest
+- Appointments cannot be booked in the past, and the duration must be greater than zero
+- A **doctor** cannot have two overlapping appointments
+- A **patient** cannot have two overlapping appointments
+- Doctor, clinic and patient must exist
+- When booking with patient details, the patient is matched by name and email, and a new patient is only created if the appointment itself is valid
 
-#### Steps:
+The current time comes from .NET's `TimeProvider`, so the rules can be tested against a fixed date.
 
-1. Navigate to the root folder.
-2. Run:
+## 🛠 Tech Stack
 
-```bash
-npm install
-```
+**Backend:** ASP.NET Core 8, Entity Framework Core, MySQL, JWT authentication, rate limiting, Swagger, LINQ, CORS
+**Frontend:** Next.js 16 (App Router, Server Components, Server Actions), React 19, TypeScript, Tailwind CSS, `@daypilot/daypilot-lite-react` (calendar), `lucide-react` (icons)
 
-This installs the `concurrently` package.
+## 🧭 Frontend Architecture
 
-3. Ensure your `package.json` in the root folder looks like this:
+- **The browser never calls the API directly.** Server Components load data and Server Actions send changes, both through `lib/api.ts` on the Next.js server (a small "backend for frontend")
+- **The JWT lives in an httpOnly cookie**, so client-side JavaScript cannot read it; `lib/api.ts` adds it as a Bearer token to API calls
+- **Three layers of access control:** `proxy.ts` redirects before a page renders, staff portal pages check the session again, and the API verifies the token and role on every request
+- **Small design system:** one palette taken from the logo (navy, sand, two pastel accents) defined in `tailwind.config.ts`, plus a few shared components (`Button`, `Alert`, `DataTable`, `ConfirmDelete`, `FormCard`)
+- User-entered text shown in the calendar is HTML-escaped
 
-```json
-{
-  "name": "your-application-name",
-  "version": "1.0.0",
-  "scripts": {
-    "dev": "concurrently -k -n FRONT,BACK -c green,blue \"npm run front\" \"npm run back\"",
-    "front": "npm --prefix front_end run dev",
-    "back": "dotnet watch run --project back-end"
-  },
-  "devDependencies": {
-    "concurrently": "^9.1.2"
-  }
-}
-```
-
----
-
-## Backend Setup
-
-1. Navigate to `back-end/` folder.
-2. Run:
-
-```bash
-dotnet build
-```
-
-3. Create `appsettings.json`. See backend README for details.
-4. Apply database migrations as required.
-5. Start backend manually if needed. Swagger UI should be available at:
+## 📂 Project Structure
 
 ```
-http://localhost:<your-port>/swagger/index.html
+ClinicAppointmentSystem/
+├── backend/
+│   ├── Controllers/
+│   │   ├── AppointmentsController.cs
+│   │   ├── AuthController.cs
+│   │   ├── ClinicController.cs
+│   │   ├── DoctorsController.cs
+│   │   ├── PatientsController.cs
+│   │   ├── SearchDoctorController.cs
+│   │   ├── SpecialitiesController.cs
+│   │   └── UsersController.cs
+│   ├── DTOs/            # Response shaping, avoids entity leakage
+│   ├── Models/
+│   ├── Auth/            # JWT options and claim names
+│   ├── Services/        # AppointmentValidator, token service, admin seeder
+│   └── Migrations/
+└── frontend/
+    ├── app/
+    │   ├── (site)/        # public pages: home, book, doctors, calendar, login, ...
+    │   └── staff/         # staff portal (role-based)
+    ├── components/        # ui/, site/, staff/, forms/, calendar/
+    ├── lib/
+    │   ├── api.ts         # server-side API client (adds the JWT)
+    │   ├── session.ts     # reads the session cookie
+    │   └── actions/       # Server Actions: auth, public, admin
+    └── proxy.ts           # redirects logged-out users, and Staff away from admin-only pages
 ```
 
-> Default port is `5196`, verify before proceeding.
+## 📖 API Endpoints Overview
 
----
+| Resource | Endpoints |
+|---|---|
+| **Appointments** | `GET/POST /api/appointments`, `POST /api/appointments/with-patient`, `GET/PUT/DELETE /api/appointments/{id}` |
+| **Patients** | `GET/POST /api/patients`, `GET/PUT/DELETE /api/patients/{id}` |
+| **Doctors** | `GET/POST /api/doctors`, `GET/PUT/DELETE /api/doctors/{id}` |
+| **Clinics** | `GET/POST /api/clinics`, `GET/PUT/DELETE /api/clinics/{id}` |
+| **Specialities** | `GET/POST /api/specialities`, `GET/PUT/DELETE /api/specialities/{id}` |
+| **Doctor Search** | `POST /api/search/doctors` — search by first/last name |
+| **Auth** | `POST /api/auth/login`, `GET /api/auth/me`, `PUT /api/auth/password` |
+| **Users** (admin) | `GET/POST /api/users`, `PUT /api/users/{id}/password`, `DELETE /api/users/{id}` |
+| **Busy slots** (public) | `GET /api/appointments/busy?from=&to=&doctorId=` |
 
-## Frontend Setup
+List endpoints always return `200 OK`; an empty result is an empty list. All endpoints are documented and testable via Swagger UI: log in with `POST /api/auth/login`, then paste the token into the **Authorize** button.
 
-1. Navigate to `front_end/` folder.
-2. Create a `.env.local` file. An example format is available in the frontend section.
-3. Run:
-
-```bash
-npm install
-```
-
-This installs all necessary frontend dependencies.
-
-Ensure your frontend `package.json` looks like this:
-
-```json
-{
-  "name": "front_end",
-  "version": "0.1.0",
-  "private": true,
-  "scripts": {
-    "dev": "next dev",
-    "build": "next build",
-    "start": "next start",
-    "lint": "next lint"
-  },
-  "dependencies": {
-    "@daypilot/daypilot-lite-react": "^3.33.1",
-    "animate.css": "^4.1.1",
-    "lucide-react": "^0.511.0",
-    "next": "14.1.0",
-    "react": "^18",
-    "react-dom": "^18"
-  },
-  "devDependencies": {
-    "@types/node": "^20",
-    "@types/react": "^18",
-    "@types/react-dom": "^18",
-    "autoprefixer": "^10.0.1",
-    "eslint": "^8",
-    "eslint-config-next": "14.1.0",
-    "postcss": "^8",
-    "tailwindcss": "^3.3.0",
-    "typescript": "^5"
-  }
-}
-```
-
----
-
-## Run Application (Auto Mode)
-
-Once all dependencies are installed:
-
-1. Ensure you're in the **root** folder.
-2. Run:
-
-```bash
-npm run dev
-```
-
-- Backend and frontend will start simultaneously.
-- **Frontend logs** will appear in **green**, and **backend logs** in **blue** in the console.
-
----
-
-## More Info
-
-Detailed package setup and usage instructions are available in the `README.md` files inside the respective `backend/` and `frontend/` folders.
-
-## REFERENCES
-
-In this section, the external resources and materials used to create this application are listed.Additinally, how and what purpose these resources used are discussed in details in the backend and frontend sections README.md files
-
-1. Noroff Learning Resources, "Front-End Technologies Module4, Back-End Technologies"
-2. ChatGPT, OpenAI. Assistance with creating "dummy texts, company name, images and visuals"
-3. MovieTheater Project, Developers own project "to use nextjs components and structure"
-4. code.devpilot.org "to create appointment calendar"  "https://code.daypilot.org"
-
-
-
-# Clinic Appointment Booking System BACK-END 
-
-This is the **Back-end API** for the Clinic Appointment Booking system developed using **ASP.NET Core 8** and **Entity Framework Core**, with a **MySQL** database.
-
-It allows patients to book appointments with doctors without authentication, following REST principles.
-
----
-
-## Technologies Used
-
-- ASP.NET Core 8
-- Entity Framework Core
-- MySQL
-- Swagger (API Documentation)
-- LINQ
-- CORS
-
----
-
-##  Setup & Configuration
-
-### 1. Clone the Repository
-```bash
-git clone https://github.com/yourusername/clinic-booking-backend.git
-cd clinic-booking-backend
-```
-
-### 2. Add `appsettings.json`
-Create a new file named `appsettings.json` in the root folder:
-
-```json
-{
-  "Logging": {
-    "LogLevel": {
-      "Default": "Information",
-      "Microsoft.AspNetCore": "Warning"
-    }
-  },
-  "AllowedHosts": "*",
-  "ConnectionStrings": {
-    "DefaultConnection": "Server=localhost;Database=medicalclinics;user=root;password=yourpassword"
-  }
-}
-```
-
->  This file is excluded from version control using `.gitignore`. Use `appsettings.json.sample.txt` for reference.
-
-### 3. Run the Application
-```bash
-dotnet build
-dotnet ef database update
-dotnet run
-```
-
-The Swagger UI will be available at: https://localhost:{PORT}/swagger
-
----
-
-##  Endpoints Overview
-
-###  Appointments
-| Method | Endpoint               | Description                     |
-|--------|------------------------|---------------------------------|
-| GET    | `/api/appointments`    | Get all appointments            |
-| GET    | `/api/appointments/{id}` | Get an appointment by ID      |
-| POST   | `/api/appointments`    | Create a new appointment        |
-| PUT    | `/api/appointments/{id}` | Update an appointment         |
-| DELETE | `/api/appointments/{id}` | Delete an appointment         |
-
-### Patients
-| Method | Endpoint           | Description                  |
-|--------|--------------------|------------------------------|
-| GET    | `/api/patients`    | Get all patients             |
-| GET    | `/api/patients/{id}` | Get patient by ID         |
-| POST   | `/api/patients`    | Create a patient             |
-| PUT    | `/api/patients/{id}` | Update a patient           |
-| DELETE | `/api/patients/{id}` | Delete a patient           |
-
-###  Doctors
-| Method | Endpoint         | Description              |
-|--------|------------------|--------------------------|
-| GET    | `/api/doctors`   | Get all doctors          |
-| GET    | `/api/doctors/{id}` | Get doctor by ID     |
-| POST   | `/api/doctors`   | Create a doctor          |
-| PUT    | `/api/doctors/{id}` | Update a doctor       |
-| DELETE | `/api/doctors/{id}` | Delete a doctor       |
-
-###  Clinics
-| Method | Endpoint         | Description              |
-|--------|------------------|--------------------------|
-| GET    | `/api/clinics`   | Get all clinics          |
-| GET    | `/api/clinics/{id}` | Get clinic by ID     |
-| POST   | `/api/clinics`   | Create a clinic          |
-| PUT    | `/api/clinics/{id}` | Update a clinic       |
-| DELETE | `/api/clinics/{id}` | Delete a clinic       |
-
-###  Specialities
-| Method | Endpoint             | Description                  |
-|--------|----------------------|------------------------------|
-| GET    | `/api/specialities`  | Get all specialities         |
-| GET    | `/api/specialities/{id}` | Get by ID               |
-| POST   | `/api/specialities`  | Create a new speciality      |
-| PUT    | `/api/specialities/{id}` | Update a speciality     |
-| DELETE | `/api/specialities/{id}` | Delete a speciality     |
-
-###  Doctor Search
-| Method | Endpoint               | Description                                  |
-|--------|------------------------|----------------------------------------------|
-| POST   | `/api/search/doctors`  | Search by first name or last name (no auth) |
-
-Sample POST Body:
+Sample search request body:
 ```json
 {
   "firstName": "John",
@@ -282,138 +123,98 @@ Sample POST Body:
 }
 ```
 
----
+## ▶️ Getting Started
 
-##  Swagger
-Visit the Swagger UI:
-```
-https://localhost:{PORT}/swagger
-```
-This shows request/response schemas, example requests, and testing tools.
+### Option A — Automatic startup (recommended)
 
----
-
-##  CORS Configuration
-All origins, headers, and methods are allowed:
-```csharp
-builder.Services.AddCors(options => {
-    options.AddPolicy("AllowAll", builder => {
-        builder.AllowAnyOrigin().AllowAnyHeader().AllowAnyMethod();
-    });
-});
-```
----
-
-##  Front-end
-To be implemented using **Next.js**. API is designed to be consumed directly with fetch/axios.
-
----
-
-##  Notes
-- Only non-sensitive PII (Personal Identifiable Information) is stored.
-- DTOs are used to shape responses and avoid entity leakage.
-- XML comments included for Swagger documentation.
-
-------------------------------------------------------------------------------------------
-
-
-# Clinic Appointment Booking System - Frontend
-
-This is the **frontend** part of the **Clinic Appointment Booking System**, built with **Next.js v14.0.1**.
-
-> ⚠️ Make sure the backend is active and running **before** starting the frontend.
-
-##  Overview
-
-This application enables users to book medical appointments, search for doctors, and provides an admin interface for managing data. Below is a breakdown of available pages and features.
-
-### 1. Book Appointment Page
-
- `http://localhost:3000/`
-
-- Allows users to create a new appointment.
-- Appointments can only be made within working hours and not before the current date.
-- Booking rules are displayed on the page.
-
-### 2. Search Doctor Page
-
- `http://localhost:3000/search`
-
-- Users can search for any doctor or view all doctors.
-- Includes functionality to clear search results.
-
-### 3. Admin Page
-
- `http://localhost:3000/admin`
-
-- A special admin panel with its own navbar.
-- Admin can manage:
-  - Clinics
-  - Doctors
-  - Patients
-  - Appointments
-  - Specialities
-- Full CRUD functionality available.
-- ❗ No authentication/authorization is currently implemented.
-- Future plans include role-based access control to comply with personal data protection laws.
-- Admin **cannot** delete a patient who has an appointment.
-
-### 4. Appointment Calendar
-
- `http://localhost:3000/calendar`
-
-- View appointments in **monthly** and **daily** format.
-- Based on [DayPilot Calendar](https://code.daypilot.org/62886/next-js-calendar-day-week-month-open-source).
-- Ensure the following dependency is installed and appears in your `package.json`:
-
+The root `package.json` uses `concurrently` to run both backend and frontend together:
 ```json
-"dependencies": {
-  "@daypilot/daypilot-lite-react": "^3.33.1"
+{
+  "scripts": {
+    "dev": "concurrently -k -n FRONT,BACK -c green,blue \"npm run front\" \"npm run back\"",
+    "front": "npm --prefix frontend run dev",
+    "back": "dotnet watch run --project backend"
+  }
 }
 ```
 
-### 5. Footbar
-
-- Includes:
-  - Dummy contact form
-  - About Us
-  - Privacy Policy
-- For realistic use, patients should accept the privacy policy before booking.
-
-### 6. Naming
-
-- The application name was randomly generated via ChatGPT.
-- It has no relation to any real entity.
-
-### 7. Images and Texts
-
-- Generated via ChatGPT.
-- Includes placeholders for loading, 404 pages, About Us, and Privacy sections.
-
-### 8. Libraries Used
-
-- `@daypilot/daypilot-lite-react` for calendar.
-- `lucide-react` for icons.
-- `animate.css` for animations.
-
-### 9. Styling
-
-- **Tailwind CSS** is used for styling.
-- The main styling configuration is handled in `tailwind.config.ts`.
-
----
-
-##  Getting Started
-
+From the root folder:
 ```bash
 npm install
 npm run dev
 ```
+Frontend logs appear in green, backend logs in blue.
 
-Make sure the backend is running and properly connected.
+### Option B — Manual startup
 
----
+**Backend:**
+```bash
+cd backend
+dotnet build
+```
+Create `appsettings.json` (it is git-ignored; see `appsettings.json.sample.txt`):
+```json
+{
+  "ConnectionStrings": {
+    "DefaultConnection": "Server=localhost;Database=medicalclinics;user=root;password=yourpassword"
+  },
+  "Jwt": {
+    "Key": "a-random-secret-of-at-least-32-characters",
+    "Issuer": "ClinicBooking",
+    "Audience": "ClinicBooking",
+    "ExpiryMinutes": 60
+  },
+  "SeedAdmin": {
+    "Email": "admin@novamed.no",
+    "Password": "a-strong-password",
+    "FullName": "Administrator"
+  },
+  "AllowedHosts": "*"
+}
+```
+The API refuses to start without a `Jwt:Key` of at least 32 characters.
+Then:
+```bash
+dotnet ef database update
+dotnet run
+```
+Swagger UI: `http://localhost:5196/swagger` (verify the port in `Properties/launchSettings.json`)
 
+**Frontend:**
+```bash
+cd frontend
+npm install
+```
+Create `.env.local` with the backend URL (see `env.local.example`):
+```
+API_URL="http://localhost:5196/api"
+```
+Then:
+```bash
+npm run dev
+```
+> ⚠️ Make sure the backend is running before starting the frontend.
 
+## 🔐 CORS Configuration
 
+All origins, headers, and methods are currently allowed (development setting):
+```csharp
+builder.Services.AddCors(options => {
+    options.AddPolicy("AllowAll", policy => {
+        policy.AllowAnyOrigin().AllowAnyHeader().AllowAnyMethod();
+    });
+});
+```
 
+## 📝 Notes
+
+- Only non-sensitive personally identifiable information is stored
+- DTOs shape all API responses to avoid leaking EF Core entities directly
+- XML comments are included throughout for Swagger documentation
+- NOVAMED, its texts and images are placeholders and have no relation to any real clinic
+
+## 📚 References
+
+1. Noroff Learning Resources — Front-End Technologies (Module 4), Back-End Technologies
+2. The author's own [Movie Theater project](https://github.com/devrimsavas/Movie_Theater_New) — reused for Next.js component structure
+3. [DayPilot](https://code.daypilot.org) — appointment calendar component

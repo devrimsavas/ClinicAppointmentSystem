@@ -28,6 +28,8 @@ namespace ClinicBooking.DTOs
         /// The name of the clinic where the doctor is assigned.
         /// </summary>
         /// <example>Star Clinic</example>
+        public int ClinicId { get; set; }
+        public int SpecialityId { get; set; }
         public string? ClinicName { get; set; }
 
         /// <summary>

@@ -1,46 +1,29 @@
 // tailwind.config.ts
+// A small, calm palette taken from the NovaMed logo:
+// navy for text and actions, warm sand background, white cards, and two soft accents.
 import type { Config } from "tailwindcss";
 
 const config: Config = {
-  content: [
-    "./pages/**/*.{js,ts,jsx,tsx,mdx}",
-    "./components/**/*.{js,ts,jsx,tsx,mdx}",
-    "./app/**/*.{js,ts,jsx,tsx,mdx}",
-  ],
+  content: ["./app/**/*.{ts,tsx}", "./components/**/*.{ts,tsx}"],
   theme: {
     extend: {
       colors: {
-        // Global Backgrounds
-        background: "hsl(192, 13%, 88%)", // pink? soft? look later
-        "background-dark": "hsl(210, 30%, 8%)", // dark mode background
-
-        // Primary Branding Color (for headers, buttons)
-        primary: "hsl(207, 90%, 54%)", // trustful medical blue
-        "primary-light": "hsl(207, 90%, 64%)",
-        "primary-dark": "hsl(207, 90%, 34%)",
-
-        // Secondary Accent (for links, hover states)
-        secondary: "hsl(152, 44%, 49%)", // soft green for calmness
-        "secondary-light": "hsl(152, 44%, 59%)",
-        "secondary-dark": "hsl(152, 44%, 39%)",
-
-        // Utility & Interface
-        muted: "hsl(210, 15%, 85%)",
-        border: "hsl(210, 15%, 90%)",
-        danger: "hsl(0, 70%, 50%)", // for alerts/errors
-        success: "hsl(152, 44%, 45%)", // for confirmations
-
-        // Text colors
-        "text-base": "hsl(210, 10%, 20%)",
-        "text-muted": "hsl(210, 10%, 40%)",
-        "text-inverted": "hsl(0, 0%, 100%)",
-
-        //Admin Theme
-        "admin-bg": "hsl(210 20% 90%)", // light grayish blue
-        "admin-accent": "hsl(230, 70%, 60%)", // vibrant blue
-        "admin-accent-dark": "hsl(230, 70%, 40%)",
-        "admin-border": "hsl(230, 15%, 80%)",
-        "admin-text": "hsl(230, 15%, 20%)",
+        primary: {
+          DEFAULT: "#0f3570", // logo navy: headings, buttons, links
+          hover: "#0a2754",
+          soft: "#e4ebf5", // light navy tint: active nav, table headers
+        },
+        ink: "#1c2430", // body text
+        muted: "#5d6876", // secondary text
+        sand: "#f3efe9", // page background
+        line: "#e3ddd3", // borders
+        mint: "#d6efe4", // accent (logo green, pastel)
+        sky: "#dcebf5", // accent (logo blue, pastel)
+        danger: "#b42318",
+        success: "#1e7a52",
+      },
+      fontFamily: {
+        sans: ["var(--font-inter)", "system-ui", "sans-serif"],
       },
     },
   },
